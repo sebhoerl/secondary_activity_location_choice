@@ -83,8 +83,6 @@ for k in range(K):
         likelihood_difference = model.compute_likelihood_difference(activity_index, facility_index)
         acceptance_likelihood = likelihood_difference + proposal_likelihood_difference
 
-        print(acceptance_likelihood)
-
         if acceptance_likelihood > 0.0 or np.log(np.random.random()) <= acceptance_likelihood:
             model.replace(activity_index, facility_index)
             activity[4] = facility_index

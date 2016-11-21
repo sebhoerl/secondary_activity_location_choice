@@ -24,9 +24,6 @@ class ModelBasedProposalDistribution(ProposalDistribution):
         self.alpha = alpha
         self.beta = beta
 
-        self.distance_likelihood_func = np.vectorize(ModelBasedProposalDistribution.distance_likelihood)
-        self.spatial_likelihood_func = np.vectorize(ModelBasedProposalDistribution.spatial_likelihood)
-
     def get_proposal(self, activity_index):
         activity = self.activities[activity_index]
         indices = self.facility_indices[activity[2]]
