@@ -49,11 +49,14 @@ class SpatialDistributionModel(DistributionModel):
         self.activity_type = activity_type
 
         self.reference = distribution_factory.get_spatial_distribution(activity_type)
-        self.distribution = utils.SpatialDistribution(minimum = self.reference.minimum, maximum = self.reference.maximum, prior = 0.001)
+        self.distribution = distribution_factory.create_spatial_distribution(self.reference)
 
+        add = []
         for activity in activities:
             if activity[2] == activity_type or activity_type is None:
-                self.distribution.add(locations[activity[4]])
+                add.append(locations[activity[4]])
+
+        self.distribution.add_all(np.array(add))
 
     def get_initial_elements(self, activity_index):
         return [ self.locations[self.activities[activity_index][4]] ]

@@ -4,6 +4,9 @@ import numpy as np
 import os
 import xml.sax
 import gzip
+import shapefile
+import matplotlib.path as mplPath
+from tqdm import tqdm
 
 # TODO: What about remote home?
 
@@ -19,7 +22,7 @@ ACTIVITY_TYPES = set([
 ])
 
 IGNORED_ACTIVITY_TYPES = set([
-    "work", "home"
+    "work", "home", "cbWork", "cbHome", "cbShop", "cbLeisure", "remote_home"
 ])
 
 MODES = set([
@@ -64,12 +67,8 @@ MODE_MAP = {
     '17' : None
 }
 
-CENSUS_SELECTOR = ["wmittel", "w_dist_obj2", "wzweck1", "Z_X", "Z_Y", "S_X", "S_Y"]
+CENSUS_SELECTOR = ["wmittel", "w_dist_obj2", "wzweck1", "Z_X", "Z_Y", "S_X", "S_Y", "Z_BFS"]
 CENSUS_TYPES = [lambda x: MODE_MAP[x], float, lambda x: PURPOSE_MAP[x], float, float, str, float, float, str]
-CENSUS_SOURCE = "Sebastian.csv"
-
-FACILITIES_SOURCE = "ch_1/facilities.xml.gz"
-CHAINS_SOURCE = "ch_1/population.xml.gz"
 
 def extract_line(line):
     return [e.strip().replace('"', '') for e in line.split(';')]
@@ -131,9 +130,11 @@ class CensusData:
         else:
             return self.activity_locations[self.type_masks[activity_type]]
 
-def load_census_data():
-    if os.path.isfile('cache/census_data.pickle'):
-        with open('cache/census_data.pickle', 'rb') as f:
+def load_census_data(settings):
+    print("Loading census data ...")
+    if os.path.isfile(settings['cache'] + '/census_data.pickle'):
+        with open(settings['cache'] + '/census_data.pickle', 'rb') as f:
+            print("from cache!")
             return pickle.load(f)
 
     data = []
@@ -141,8 +142,8 @@ def load_census_data():
     hmap = dict()
     first = True
 
-    with open(CENSUS_SOURCE) as f:
-        for line in f:
+    with open(settings['census']) as f:
+        for line in tqdm(f):
             if first:
                 headers = extract_line(line)
                 hmap = { v : k for k, v in enumerate(headers) }
@@ -156,7 +157,7 @@ def load_census_data():
 
     data = CensusData(np.array(data))
 
-    with open('cache/census_data.pickle', 'wb+') as f:
+    with open(settings['cache'] + '/census_data.pickle', 'wb+') as f:
         pickle.dump(data, f)
 
     return data
@@ -211,8 +212,11 @@ class FacilityReader(xml.sax.ContentHandler):
     def __init__(self):
         self.facilities = []
         self.activity_types = set()
+        self.bar = tqdm()
 
     def startElement(self, name, attributes):
+        self.bar.update(1)
+
         if name == "facility":
             self.facilities.append([
                 attributes['id'],
@@ -225,12 +229,14 @@ class FacilityReader(xml.sax.ContentHandler):
             self.facilities[-1][3].add(attributes['type'])
             self.activity_types.add(attributes['type'])
 
-def load_facility_data():
-    if os.path.isfile('cache/facility_data.pickle'):
-        with open('cache/facility_data.pickle', 'rb') as f:
+def load_facility_data(settings):
+    print("Loading facility data ...")
+    if os.path.isfile(settings['cache'] + '/facility_data.pickle'):
+        with open(settings['cache'] + '/facility_data.pickle', 'rb') as f:
+            print("from cache!")
             return pickle.load(f)
 
-    with gzip.open(FACILITIES_SOURCE) as f:
+    with gzip.open(settings['facilities']) as f:
         reader = FacilityReader()
         parser = xml.sax.make_parser()
         parser.setContentHandler(reader)
@@ -240,7 +246,7 @@ def load_facility_data():
 
     data = FacilityData(reader.facilities, reader.activity_types)
 
-    with open('cache/facility_data.pickle', 'wb+') as f:
+    with open(settings['cache'] + '/facility_data.pickle', 'wb+') as f:
         pickle.dump(data, f)
 
     return data
@@ -253,7 +259,11 @@ class PopulationReader(xml.sax.ContentHandler):
         self.selected_plan = False
         self.plan = []
 
+        self.bar = tqdm()
+
     def startElement(self, name, attributes):
+        self.bar.update(1)
+
         if name == "plan" and attributes["selected"] == "yes":
             self.plan = []
             self.selected_plan = True
@@ -303,12 +313,14 @@ class ChainData:
     def get_activities(self):
         return self.raw
 
-def load_chain_data(facility_data):
-    if os.path.isfile('cache/chain_data.pickle'):
-        with open('cache/chain_data.pickle', 'rb') as f:
+def load_chain_data(settings, facility_data):
+    print("Loading population data ...")
+    if os.path.isfile(settings['cache'] + '/chain_data.pickle'):
+        with open(settings['cache'] + '/chain_data.pickle', 'rb') as f:
+            print("from cache!")
             return pickle.load(f)
 
-    with gzip.open(CHAINS_SOURCE) as f:
+    with gzip.open(settings['population']) as f:
         reader = PopulationReader(facility_data.get_index_map())
         parser = xml.sax.make_parser()
         parser.setContentHandler(reader)
@@ -318,17 +330,99 @@ def load_chain_data(facility_data):
 
     data = ChainData(reader.activities)
 
-    with open('cache/chain_data.pickle', 'wb+') as f:
+    with open(settings['cache'] + '/chain_data.pickle', 'wb+') as f:
         pickle.dump(data, f)
 
     return data
 
+class District:
+    def __init__(self, paths, center):
+        self.center = center
+        self.paths = paths
 
+    def contains(self, c):
+        index = sum([1 for path in self.paths if path.contains_point(c)])
+        return index % 2 == 1
 
+def load_district_data(settings):
+    print("Loading district data ...")
+    if os.path.isfile(settings['cache'] + '/districts.pickle'):
+        with open(settings['cache'] + '/districts.pickle', 'rb') as f:
+            print("from cache!")
+            return pickle.load(f)
 
+    shp = shapefile.Reader(settings['districts'])
+    shapes = shp.shapes()
+    records = shp.records()
 
+    districts = []
 
+    for shape, record in tqdm(zip(shapes, records), total = len(shapes)):
+        points = np.array(shape.points)
 
+        lv03 = pyproj.Proj("+init=EPSG:21781")
+        lv03p = pyproj.Proj("+init=EPSG:2056")
+
+        center = record[9:11]
+        center[0], center[1] = pyproj.transform(lv03, lv03p, float(center[0]), float(center[1]))
+
+        x, y = pyproj.transform(lv03, lv03p, points[:,0].astype(np.float), points[:,1].astype(np.float))
+        x, y = np.array(x).reshape((len(x), 1)), np.array(y).reshape((len(y), 1))
+        points = np.hstack((x, y))
+
+        parts = shape.parts
+        parts.append(len(points))
+
+        paths = []
+
+        for i in range(len(parts) - 1):
+            paths.append(mplPath.Path(points[parts[i]:parts[i+1],:]))
+
+        districts.append(District(paths, np.array(center)))
+
+    with open(settings['cache'] + '/districts.pickle', 'wb+') as f:
+        pickle.dump(districts, f)
+
+    return districts
+
+class Bin2Indices:
+    def __init__(self, indices):
+        self.indices = indices
+
+    def get_indices(self, b, t):
+        if not b in self.indices: return None
+        indices = self.indices[b][t]
+        return indices if len(indices) > 0 else None
+
+def load_bin2indices(settings, distribution_factory, facility_data):
+    print("Reading bin2indices...")
+    facility_indices = facility_data.get_facility_indices()
+    locations = facility_data.get_locations()
+
+    if os.path.isfile(settings['cache'] + '/bin2indices.pickle'):
+        with open(settings['cache'] + '/bin2indices.pickle', 'rb') as f:
+            print("from cache!")
+            return pickle.load(f)
+
+    indices = {}
+    spatial = distribution_factory.get_spatial_distribution()
+
+    for index, location in tqdm(enumerate(locations), total = len(locations)):
+        b = spatial.get_bin(location)
+
+        if not b in indices:
+            indices[b] = { t : [] for t in ACTIVITY_TYPES }
+
+        for t in ACTIVITY_TYPES:
+            if index in facility_indices[t]:
+                indices[b][t].append(index)
+
+    indices = Bin2Indices(indices)
+
+    with open(settings['cache'] + '/bin2indices.pickle', 'wb+') as f:
+        pickle.dump(indices, f)
+
+    return indices
 
 
 
