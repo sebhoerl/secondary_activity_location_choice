@@ -90,7 +90,7 @@ class DistrictBasedSpatialDistribution:
         self.updated = False
 
     def remove(self, coord):
-        self.counts[self.get_bin(coord)] += 1
+        self.counts[self.get_bin(coord)] -= 1
         self.updated = False
 
     def get_bin(self, c):

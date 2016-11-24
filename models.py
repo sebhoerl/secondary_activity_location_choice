@@ -59,10 +59,16 @@ class SpatialDistributionModel(DistributionModel):
         self.distribution.add_all(np.array(add))
 
     def get_initial_elements(self, activity_index):
-        return [ self.locations[self.activities[activity_index][4]] ]
+        if self.activities[activity_index][2] == self.activity_type or self.activity_type is None:
+            return [ self.locations[self.activities[activity_index][4]] ]
+        else:
+            return []
 
     def get_final_elements(self, activity_index, facility_index):
-        return [ self.locations[facility_index] ]
+        if self.activities[activity_index][2] == self.activity_type or self.activity_type is None:
+            return [ self.locations[facility_index] ]
+        else:
+            return []
 
     def replace(self, activity_index, facility_index):
         if self.activities[activity_index][2] == self.activity_type or self.activity_type is None:
@@ -88,18 +94,21 @@ class DistanceDistributionModel(DistributionModel):
                     self.distribution.add(la.norm(source - target))
 
     def get_distances(self, activity_index, location):
-        activity = self.activities[activity_index]
-        distances = []
+        if self.activities[activity_index][2] == self.activity_type or self.activity_type is None:
+            activity = self.activities[activity_index]
+            distances = []
 
-        if activity[0] is not None:
-            left = self.locations[self.activities[activity[0]][4]]
-            distances.append(la.norm(left - location))
+            if activity[0] is not None:
+                left = self.locations[self.activities[activity[0]][4]]
+                distances.append(la.norm(left - location))
 
-        if activity[1] is not None:
-            right = self.locations[self.activities[activity[1]][4]]
-            distances.append(la.norm(right - location))
+            if activity[1] is not None:
+                right = self.locations[self.activities[activity[1]][4]]
+                distances.append(la.norm(right - location))
 
-        return distances
+            return distances
+        else:
+            return []
 
     def get_initial_elements(self, activity_index):
         return self.get_distances(activity_index, self.locations[self.activities[activity_index][4]])

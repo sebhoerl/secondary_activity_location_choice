@@ -47,18 +47,18 @@ class ModelBasedProposalDistribution(ProposalDistribution):
         ndL = np.log(np.array([next_distance_distribution.pdf(d) for d in next_distances]))
         alL = np.log(np.array([spatial_distribution.pdf(c) for c in self.locations[indices]]))
 
-        prev_pdL = np.log(previous_distance_distribution.pdf(la.norm(current_location - previous_location)))
-        prev_ndL = np.log(next_distance_distribution.pdf(la.norm(current_location - next_location)))
-        prev_alL = np.log(spatial_distribution.pdf(current_location - previous_location))
+        #prev_pdL = np.log(previous_distance_distribution.pdf(la.norm(current_location - previous_location)))
+        #prev_ndL = np.log(next_distance_distribution.pdf(la.norm(current_location - next_location)))
+        #prev_alL = np.log(spatial_distribution.pdf(current_location - previous_location))
 
-        L = self.alpha * (pdL + ndL) + self.beta * alL
-        prev_L = self.alpha * (prev_pdL + prev_ndL) + self.beta * prev_alL
+        L = self.beta * (pdL + ndL) + self.alpha * alL
+        #prev_L = self.alpha * (prev_pdL + prev_ndL) + self.beta * prev_alL
 
         P = np.exp(L - scipy.misc.logsumexp(L))
         selection = np.random.choice(np.arange(len(indices)), p = P)
 
         new_proposal_likelihood = L[selection]
-        previous_proposal_likelihood = prev_L
+        #previous_proposal_likelihood = prev_L
 
         return indices[selection], 0 # previous_proposal_likelihood - new_proposal_likelihood
 
@@ -93,10 +93,10 @@ class ApproximateProposalDistribution(ProposalDistribution):
         ndL = np.log(np.array([next_distance_distribution.pdf(d) for d in next_distances]))
         alL = np.log(np.array([spatial_distribution.pdf(c) for c in centroids]))
 
-        prev_pdL = np.log(previous_distance_distribution.pdf(la.norm(current_location - previous_location)))
-        prev_ndL = np.log(next_distance_distribution.pdf(la.norm(current_location - next_location)))
-        prev_alL = np.log(spatial_distribution.pdf(current_location - previous_location))
-        prev_L = self.alpha * (prev_pdL + prev_ndL) + self.beta * prev_alL
+        #prev_pdL = np.log(previous_distance_distribution.pdf(la.norm(current_location - previous_location)))
+        #prev_ndL = np.log(next_distance_distribution.pdf(la.norm(current_location - next_location)))
+        #prev_alL = np.log(spatial_distribution.pdf(current_location - previous_location))
+        #prev_L = self.alpha * (prev_pdL + prev_ndL) + self.beta * prev_alL
 
         L = self.alpha * (pdL + ndL) + self.beta * alL
         P = np.exp(L - scipy.misc.logsumexp(L))
@@ -111,9 +111,9 @@ class ApproximateProposalDistribution(ProposalDistribution):
         pdL = np.log(previous_distance_distribution.pdf(la.norm(selected_location - previous_location)))
         ndL = np.log(next_distance_distribution.pdf(la.norm(selected_location - next_location)))
         alL = np.log(spatial_distribution.pdf(selected_location - previous_location))
-        L = self.alpha * (pdL + ndL) + self.beta * alL
+        L = self.beta * (pdL + ndL) + self.alpha * alL
 
         new_proposal_likelihood = L
-        previous_proposal_likelihood = prev_L
+        #previous_proposal_likelihood = prev_L
 
-        return index, previous_proposal_likelihood - new_proposal_likelihood
+        return index, 0# previous_proposal_likelihood - new_proposal_likelihood

@@ -47,6 +47,9 @@ config_has_changed = settings["no_cleanup"] == "no"
 if not os.path.exists(settings['cache']):
     os.mkdir(settings['cache'])
 
+if not os.path.exists(settings['output']):
+    os.mkdir(settings['output'])
+
 if os.path.exists(settings['cache'] + "/settings.pickle"):
     with open(settings['cache'] + "/settings.pickle", "rb") as f:
         previous_settings = pickle.load(f)
@@ -128,8 +131,8 @@ if settings['model'] == "full":
             model.add(models.DistanceDistributionModel(activities, locations, distribution_factory, mode = mode, activity_type = activity_type), name = "dist_" + mode + "_" + activity_type)
 elif settings['model'] == "aggregate":
     model = models.HybridDistributionModel()
-    model.add(models.SpatialDistributionModel(activities, locations, distribution_factory), name = "spatial")
-    model.add(models.DistanceDistributionModel(activities, locations, distribution_factory), name="dist")
+    model.add(models.SpatialDistributionModel(activities, locations, distribution_factory), name = "spatial", factor = settings['alpha'])
+    model.add(models.DistanceDistributionModel(activities, locations, distribution_factory), name="dist", factor = settings['beta'])
 else:
     raise "Unknown model type"
 
@@ -200,17 +203,24 @@ while True:
             accepted_samples += 1
             model.replace(activity_index, facility_index)
             activity[4] = facility_index
-            likelihood = model.compute_likelihood()
+
+            new_likelihood = model.compute_likelihood()
+            expected_likelihood = likelihood + likelihood_difference
+
+            assert(abs(new_likelihood - expected_likelihood) < 1e-3)
+            likelihood = new_likelihood
+        else:
+            modified_likelihood = model.compute_likelihood()
+            assert(abs(modified_likelihood - likelihood) < 1e-3)
 
         if time.time() >= next_cmd_time:
             next_cmd_time += cmd_interval
 
             print()
             print("Runtime: ", str(datetime.timedelta(seconds=next_cmd_time - cmd_interval - start_time)))
-            print("Current log likelihood: ", likelihood)
-            print("Acceptance rate: ", accepted_samples / total_samples)
-            print("Total samples: ", total_samples)
-            print("Samples / s: %.2f" % total_samples / (next_cmd_time - cmd_interval - start_time) )
+            print("Current log likelihood: ", str(likelihood))
+            print("Acceptance rate: ", str(accepted_samples / total_samples))
+            print("Total samples: ", str(total_samples))
             print()
 
         if time.time() >= next_time:
