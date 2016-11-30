@@ -50,7 +50,7 @@ class QuantileBasedDistanceDistribution:
 
     def _update(self):
         self.epdf = self.counts + self.prior
-        self.epdf /= self.boundaies[1:] - self.boundaries[:-1]
+        self.epdf /= self.boundaries[1:] - self.boundaries[:-1]
         self.epdf /= np.sum(self.epdf)
         self.ecdf = np.cumsum(self.epdf)
         self.updated = True
