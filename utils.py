@@ -10,6 +10,73 @@ from itertools import product
 import matplotlib.path as mplPath
 from tqdm import tqdm
 
+class QuantileBasedDistanceDistribution:
+    def __init__(self, data = [], maximum = None, prior = 0.0, bins = 40, boundaries = None):
+        self.prior = prior
+        self.bins = bins
+        self.maximum = np.max(data) if maximum is None else maximum
+        self.dx = self.maximum / self.bins
+
+        self.counts = np.zeros((self.bins), dtype = np.int)
+
+        self.epdf = np.zeros((self.bins))
+        self.ecdf = np.zeros((self.bins))
+
+        if len(data) > 0 and boundaries is not None:
+            raise "Either data should be given or predefined boundaries (both given now)"
+        elif len(data) == 0 and boundaries is None:
+            raise "Either data should be given or predefined boundaries (none given now)"
+
+        if len(data) > 0:
+            # Find boundaries
+            sorter = np.argsort(data)
+            selector = np.floor(np.linspace(0, len(data) - 1, self.bins + 1)).astype(np.int)
+            self.boundaries = data[sorter[selector]]
+        else:
+            self.boundaries = boundaries
+
+        self.updated = False
+
+        for distance in data: self.add(distance)
+        self._update()
+
+    def add(self, distance):
+        self.counts[self.get_bin(distance)] += 1
+        self.updated = False
+
+    def remove(self, distance):
+        self.counts[self.get_bin(distance)] -= 1
+        self.updated = False
+
+    def _update(self):
+        self.epdf = self.counts + self.prior
+        self.epdf /= self.boundaies[1:] - self.boundaries[:-1]
+        self.epdf /= np.sum(self.epdf)
+        self.ecdf = np.cumsum(self.epdf)
+        self.updated = True
+
+    def get_bin(self, x):
+        return int(np.sum(x > self.boundaries[1:-1]))
+
+    def get_range(self):
+        return self.boundaries
+
+    def pdf(self, x):
+        if not self.updated: self._update()
+        return self.epdf[self.get_bin(x)]
+
+    def cdf(self, x):
+        if not self.updated: self._update()
+        return self.ecdf[self.get_bin(x)]
+
+    def get_epdf(self):
+        if not self.updated: self._update()
+        return self.epdf
+
+    def get_ecdf(self):
+        if not self.updated: self._update()
+        return self.ecdf
+
 class DistanceDistribution:
     def __init__(self, data = [], maximum = None, prior = 0.0, bins = 40):
         self.prior = prior
@@ -45,7 +112,7 @@ class DistanceDistribution:
         return min(int(np.floor(x / self.dx)), self.bins - 1)
 
     def get_range(self):
-        return np.arange(self.bins) * self.dx
+        return np.arange(self.bins + 1) * self.dx
 
     def pdf(self, x):
         if not self.updated: self._update()
@@ -233,7 +300,7 @@ class SpatialDistribution:
         return self.epdf
 
 class DistributionFactory:
-    def __init__(self, census_data, district_data, spatial_model = "grid", distance_bins = 40, spatial_bins = (10, 10)):
+    def __init__(self, census_data, district_data, spatial_model = "grid", distance_bins = 40, spatial_bins = (10, 10), equi_prob = False):
         self.census_data = census_data
         self.district_data = district_data
         self.distance_bins = distance_bins
@@ -242,6 +309,7 @@ class DistributionFactory:
         self.distance_distributions = {}
         self.spatial_distributions = {}
         self.districts = district_data
+        self.equi_prob = equi_prob
 
     def get_distance_distribution(self, mode = None, activity_type = None):
         key = (mode, activity_type)
@@ -252,7 +320,11 @@ class DistributionFactory:
         print("Loading distance distribution for " + str(mode) + " / " + str(activity_type) + " ...")
 
         distances = self.census_data.get_distances(mode, activity_type)
-        distribution = DistanceDistribution(distances, prior = 0.001, bins = self.distance_bins)
+
+        if self.equi_prob:
+            distribution = QuantileBasedDistanceDistribution(distances, prior = 0.001, bins = self.distance_bins)
+        else:
+            distribution = DistanceDistribution(distances, prior = 0.001, bins = self.distance_bins)
 
         self.distance_distributions[key] = distribution
         return distribution
@@ -283,3 +355,36 @@ class DistributionFactory:
             return SpatialDistribution(minimum = reference.minimum, maximum = reference.maximum, prior = 0.001, bins = self.spatial_bins)
         else:
             raise "Invalid spatial model"
+
+    def create_distance_distribution(self, reference):
+        print("Creating distance distribution ...")
+
+        if self.equi_prob:
+            return QuantileBasedDistanceDistribution(maximum = reference.maximum, prior = 0.001, bins = reference.bins, boundaries = reference.boundaries)
+        else:
+            return DistanceDistribution(maximum = reference.maximum, prior = 0.001, bins = reference.bins)
+
+def find_homes(activities):
+    links = {}
+    homes = set()
+
+    # First, find all homes
+    for index, activity in enumerate(activities):
+        if activity[2] == "home":
+            homes.add(index)
+
+    # Second, find associated activities
+    for home in homes:
+        links[home] = activities[home][4]
+
+        left = activities[home][0]
+        while left is not None:
+            links[left] = activities[home][4]
+            left = activities[left][0]
+
+        right = activities[home][1]
+        while right is not None:
+            links[right] = activities[home][4]
+            right = activities[right][1]
+
+    return links

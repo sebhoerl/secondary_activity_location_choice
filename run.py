@@ -23,6 +23,7 @@ argument_parser.add_argument("--proposal", default = "random", choices = ("rando
 
 argument_parser.add_argument("--spatial-model", default = "grid", choices = ("grid", "districts"))
 argument_parser.add_argument("--distance-bins", type=int, default = 40)
+argument_parser.add_argument("--distance-histogram", default = "equi_distance", choices = ("equi_distance", "equi_probability"))
 argument_parser.add_argument("--spatial-grid-bins-x", type=int, default = 10)
 argument_parser.add_argument("--spatial-grid-bins-y", type=int, default = 10)
 
@@ -81,7 +82,8 @@ distribution_factory = utils.DistributionFactory(
     census_data, district_data,
     settings['spatial_model'],
     settings['distance_bins'],
-    (settings['spatial_grid_bins_x'], settings['spatial_grid_bins_y'])
+    (settings['spatial_grid_bins_x'], settings['spatial_grid_bins_y']),
+    settings['distance_histogram'] == "equi_probability"
 )
 # TODO: Somehow warm this up?
 
@@ -105,7 +107,12 @@ elif settings['data'] == "uniform":
             indices = facility_indices[activity[2]]
             activity[4] = indices[np.random.randint(len(indices))]
 elif settings['data'] == "reset":
-    raise "Not implemented yet"
+    print("Resetting facilities to home ...")
+
+    homes = utils.find_homes(activities)
+    for index, activity in enumerate(tqdm(activities)):
+        if activity[2] in data.IGNORED_ACTIVITY_TYPES: continue
+        if index in homes: activity[4] = homes[index]
 else:
     raise "Unknown data mode"
 
@@ -113,22 +120,23 @@ else:
 
 if settings['model'] == "full":
     model = models.HybridDistributionModel()
+    covered_activity_types = data.ACTIVITY_TYPES - data.IGNORED_ACTIVITY_TYPES
 
     model.add(models.SpatialDistributionModel(activities, locations, distribution_factory), name = "spatial")
-    for activity_type in (data.ACTIVITY_TYPES - data.IGNORED_ACTIVITY_TYPES):
+    for activity_type in covered_activity_types:
         model.add(models.SpatialDistributionModel(activities, locations, distribution_factory, activity_type = activity_type), name = "spatial_" + activity_type)
 
     model.add(models.DistanceDistributionModel(activities, locations, distribution_factory), name="dist")
 
-    for activity_type in (data.ACTIVITY_TYPES - data.IGNORED_ACTIVITY_TYPES):
+    for activity_type in covered_activity_types:
         model.add(models.DistanceDistributionModel(activities, locations, distribution_factory, activity_type = activity_type), name = "dist_" + activity_type)
 
     for mode in data.MODES:
         model.add(models.DistanceDistributionModel(activities, locations, distribution_factory, mode = mode), name = "dist_" + mode)
 
-    for activity_type in (data.ACTIVITY_TYPES - data.IGNORED_ACTIVITY_TYPES):
-        for mode in data.MODES:
-            model.add(models.DistanceDistributionModel(activities, locations, distribution_factory, mode = mode, activity_type = activity_type), name = "dist_" + mode + "_" + activity_type)
+    #for activity_type in covered_activity_types:
+    #    for mode in data.MODES:
+    #        model.add(models.DistanceDistributionModel(activities, locations, distribution_factory, mode = mode, activity_type = activity_type), name = "dist_" + mode + "_" + activity_type)
 elif settings['model'] == "aggregate":
     model = models.HybridDistributionModel()
     model.add(models.SpatialDistributionModel(activities, locations, distribution_factory), name = "spatial", factor = settings['alpha'])
@@ -257,8 +265,9 @@ while True:
 
                 if isinstance(model.distributions[j], models.DistanceDistributionModel):
                     plot_range = distj.reference.get_range()
-                    plt.plot(plot_range, distj.reference.get_epdf(), 'k')
-                    plt.plot(plot_range, distj.distribution.get_epdf(), 'r')
+                    plt.plot(np.arange(len(plot_range) - 1), distj.reference.get_epdf() / (plot_range[1:] - plot_range[:-1]), 'k')
+                    plt.plot(np.arange(len(plot_range) - 1), distj.distribution.get_epdf() / (plot_range[1:] - plot_range[:-1]), 'r')
+                    plt.xticks(np.arange(len(plot_range)), plot_range, rotation='vertical')
                 else:
                     plot_ref = model.distributions[j].reference.get_epdf().flatten()
                     plot_dist = model.distributions[j].distribution.get_epdf().flatten()

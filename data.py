@@ -27,7 +27,9 @@ IGNORED_ACTIVITY_TYPES = set([
 
 MODES = set([
     "car",
-    "pt"
+    "pt",
+    "bike",
+    "walk"
 ])
 
 PURPOSE_MAP = {
@@ -61,8 +63,8 @@ MODE_MAP = {
     '11' : None,
     '12' : None,
     '13' : None,
-    '14' : None, #'bike',
-    '15' : None, #'walk',
+    '14' : "bike", #'bike',
+    '15' : "walk", #'walk',
     '16' : None,
     '17' : None
 }

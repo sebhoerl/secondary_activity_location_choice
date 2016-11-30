@@ -98,7 +98,7 @@ class ApproximateProposalDistribution(ProposalDistribution):
         #prev_alL = np.log(spatial_distribution.pdf(current_location - previous_location))
         #prev_L = self.alpha * (prev_pdL + prev_ndL) + self.beta * prev_alL
 
-        L = self.alpha * (pdL + ndL) + self.beta * alL
+        L = self.beta * (pdL + ndL) + self.alpha * alL
         P = np.exp(L - scipy.misc.logsumexp(L))
         selection = np.random.choice(np.arange(len(centroids)), p = P)
 
