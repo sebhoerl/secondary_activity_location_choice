@@ -30,7 +30,8 @@ class QuantileBasedDistanceDistribution:
         if len(data) > 0:
             # Find boundaries
             sorter = np.argsort(data)
-            selector = np.floor(np.linspace(0, len(data) - 1, self.bins + 1)).astype(np.int)
+            selector = np.unique(np.floor(np.linspace(0, len(data) - 1, self.bins + 1)).astype(np.int))
+            self.bins = selector.shape[0] - 1
             self.boundaries = data[sorter[selector]]
         else:
             self.boundaries = boundaries
