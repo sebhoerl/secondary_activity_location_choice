@@ -17,11 +17,6 @@ class QuantileBasedDistanceDistribution:
         self.maximum = np.max(data) if maximum is None else maximum
         self.dx = self.maximum / self.bins
 
-        self.counts = np.zeros((self.bins), dtype = np.int)
-
-        self.epdf = np.zeros((self.bins))
-        self.ecdf = np.zeros((self.bins))
-
         if len(data) > 0 and boundaries is not None:
             raise "Either data should be given or predefined boundaries (both given now)"
         elif len(data) == 0 and boundaries is None:
@@ -30,11 +25,16 @@ class QuantileBasedDistanceDistribution:
         if len(data) > 0:
             # Find boundaries
             sorter = np.argsort(data)
-            selector = np.unique(np.floor(np.linspace(0, len(data) - 1, self.bins + 1)).astype(np.int))
-            self.bins = selector.shape[0] - 1
-            self.boundaries = data[sorter[selector]]
+            selector = np.floor(np.linspace(0, len(data) - 1, self.bins + 1)).astype(np.int)
+            self.boundaries = np.unique(data[sorter[selector]])
+            self.bins = self.boundaries.shape[0] - 1
         else:
             self.boundaries = boundaries
+
+        self.counts = np.zeros((self.bins), dtype = np.int)
+
+        self.epdf = np.zeros((self.bins))
+        self.ecdf = np.zeros((self.bins))
 
         self.updated = False
 

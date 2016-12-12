@@ -360,6 +360,7 @@ def load_district_data(settings):
     districts = []
 
     for shape, record in tqdm(zip(shapes, records), total = len(shapes)):
+        # TODO: What about holes?!
         points = np.array(shape.points)
 
         lv03 = pyproj.Proj("+init=EPSG:21781")

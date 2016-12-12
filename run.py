@@ -140,7 +140,11 @@ if settings['model'] == "full":
 elif settings['model'] == "aggregate":
     model = models.HybridDistributionModel()
     model.add(models.SpatialDistributionModel(activities, locations, distribution_factory), name = "spatial", factor = settings['alpha'])
-    model.add(models.DistanceDistributionModel(activities, locations, distribution_factory), name="dist", factor = settings['beta'])
+
+    for mode in data.MODES:
+        model.add(models.DistanceDistributionModel(activities, locations, distribution_factory, mode = mode), name = "dist_" + mode)
+
+    #model.add(models.DistanceDistributionModel(activities, locations, distribution_factory), name="dist", factor = settings['beta'])
 else:
     raise "Unknown model type"
 
@@ -265,8 +269,8 @@ while True:
 
                 if isinstance(model.distributions[j], models.DistanceDistributionModel):
                     plot_range = distj.reference.get_range()
-                    plt.plot(np.arange(len(plot_range) - 1), distj.reference.get_epdf() / (plot_range[1:] - plot_range[:-1]), 'k')
-                    plt.plot(np.arange(len(plot_range) - 1), distj.distribution.get_epdf() / (plot_range[1:] - plot_range[:-1]), 'r')
+                    plt.plot(np.arange(len(plot_range) - 1), distj.reference.get_epdf(), 'k')
+                    plt.plot(np.arange(len(plot_range) - 1), distj.distribution.get_epdf(), 'r')
                     plt.xticks(np.arange(len(plot_range)), plot_range, rotation='vertical')
                 else:
                     plot_ref = model.distributions[j].reference.get_epdf().flatten()
